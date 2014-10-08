@@ -6,9 +6,6 @@ using System.Threading;
 
 namespace SocketAsyncClient
 {
-    /// <summary>
-    /// Implements the connection logic for the socket client.
-    /// </summary>
     internal sealed class SocketClient : IDisposable
     {
         /// <summary>
@@ -51,10 +48,6 @@ namespace SocketAsyncClient
             this.clientSocket = new Socket(this.hostEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
         }
 
-        /// <summary>
-        /// Connect to the host.
-        /// </summary>
-        /// <returns>True if connection has succeded, else false.</returns>
         internal void Connect()
         {
             SocketAsyncEventArgs connectArgs = new SocketAsyncEventArgs();
@@ -72,13 +65,18 @@ namespace SocketAsyncClient
                 throw new SocketException((Int32)errorCode);
             }
         }
-
-        /// <summary>
-        /// Disconnect from the host.
-        /// </summary>
         internal void Disconnect()
         {
             clientSocket.Disconnect(false);
+        }
+        internal void Send(byte[] message)
+        {
+            var completeArgs = new SocketAsyncEventArgs();
+            completeArgs.SetBuffer(message, 0, message.Length);
+            completeArgs.UserToken = this.clientSocket;
+            completeArgs.RemoteEndPoint = this.hostEndPoint;
+            completeArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnSend);
+            clientSocket.SendAsync(completeArgs);
         }
 
         private void OnConnect(object sender, SocketAsyncEventArgs e)
@@ -89,13 +87,6 @@ namespace SocketAsyncClient
             // Set the flag for socket connected.
             this.connected = (e.SocketError == SocketError.Success);
         }
-
-        private void OnReceive(object sender, SocketAsyncEventArgs e)
-        {
-            // Signals the end of receive.
-            autoSendReceiveEvents[SendOperation].Set();
-        }
-
         private void OnSend(object sender, SocketAsyncEventArgs e)
         {
             //// Signals the end of send.
@@ -119,11 +110,11 @@ namespace SocketAsyncClient
             //    this.ProcessError(e);
             //}
         }
-
-        /// <summary>
-        /// Close socket in case of failure and throws a SockeException according to the SocketError.
-        /// </summary>
-        /// <param name="e">SocketAsyncEventArg associated with the failed operation.</param>
+        private void OnReceive(object sender, SocketAsyncEventArgs e)
+        {
+            // Signals the end of receive.
+            autoSendReceiveEvents[SendOperation].Set();
+        }
         private void ProcessError(SocketAsyncEventArgs e)
         {
             Socket s = e.UserToken as Socket;
@@ -149,48 +140,6 @@ namespace SocketAsyncClient
 
             // Throw the SocketException
             throw new SocketException((Int32)e.SocketError);
-        }
-
-        /// <summary>
-        /// Exchange a message with the host.
-        /// </summary>
-        /// <param name="message">Message to send.</param>
-        /// <returns>Message sent by the host.</returns>
-        internal void Send(String data)
-        {
-            if (this.connected)
-            {
-                // Create a buffer to send.
-                var message = BuildMessage(Encoding.UTF8.GetBytes(data));
-                // Prepare arguments for send/receive operation.
-                SocketAsyncEventArgs completeArgs = new SocketAsyncEventArgs();
-                completeArgs.SetBuffer(message, 0, message.Length);
-                completeArgs.UserToken = this.clientSocket;
-                completeArgs.RemoteEndPoint = this.hostEndPoint;
-                completeArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnSend);
-
-                // Start sending asyncronally.
-                clientSocket.SendAsync(completeArgs);
-
-                // Wait for the send/receive completed.
-                //AutoResetEvent.WaitAll(autoSendReceiveEvents);
-
-                // Return data from SocketAsyncEventArgs buffer.
-                //return Encoding.ASCII.GetString(completeArgs.Buffer, completeArgs.Offset, completeArgs.BytesTransferred);
-            }
-            else
-            {
-                throw new SocketException((Int32)SocketError.NotConnected);
-            }
-        }
-
-        public static byte[] BuildMessage(byte[] data)
-        {
-            var header = BitConverter.GetBytes(data.Length);
-            var message = new byte[header.Length + data.Length];
-            header.CopyTo(message, 0);
-            data.CopyTo(message, header.Length);
-            return message;
         }
 
         #region IDisposable Members

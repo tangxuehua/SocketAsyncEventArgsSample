@@ -1,30 +1,29 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace SocketAsyncClient
 {
-    public static class Program
+    static class Program
     {
-        public static void Main(string[] args)
+        static void Main(string[] args)
         {
             try
             {
                 SocketClient client = new SocketClient(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9900));
                 client.Connect();
-                int iterations = 25000;
+                int iterations = 2500;
                 int threadCount = 40;
+                int messageSize = 1024;
+                var data = new byte[messageSize];
+                var message = BuildMessage(data);
 
                 var action = new Action(() =>
                 {
                     for (var i = 0; i < iterations; i++)
                     {
-                        client.Send("Hello World");
+                        client.Send(message);
                     }
                 });
 
@@ -46,6 +45,14 @@ namespace SocketAsyncClient
                 Console.WriteLine("ERROR: " + ex.Message);
                 Console.Read();
             }
+        }
+        static byte[] BuildMessage(byte[] data)
+        {
+            var header = BitConverter.GetBytes(data.Length);
+            var message = new byte[header.Length + data.Length];
+            header.CopyTo(message, 0);
+            data.CopyTo(message, header.Length);
+            return message;
         }
     }
 }

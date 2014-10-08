@@ -3,11 +3,11 @@ using System.Net;
 
 namespace SocketAsyncServer
 {
-    public static class Program
+    static class Program
     {
         private const Int32 DEFAULT_PORT = 9900, DEFAULT_MAX_NUM_CONNECTIONS = 10, DEFAULT_BUFFER_SIZE = 30000;
 
-        public static void Main(String[] args)
+        static void Main(String[] args)
         {
             try
             {

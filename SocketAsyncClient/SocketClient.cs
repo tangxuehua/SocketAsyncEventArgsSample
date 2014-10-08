@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -31,8 +32,9 @@ namespace SocketAsyncClient
         /// <summary>
         /// Signals a connection.
         /// </summary>
-        private static AutoResetEvent autoConnectEvent = new AutoResetEvent(false); 
+        private static AutoResetEvent autoConnectEvent = new AutoResetEvent(false);
 
+        private static AutoResetEvent autoSendEvent = new AutoResetEvent(false); 
         /// <summary>
         /// Signals the send/receive operation.
         /// </summary>
@@ -42,10 +44,16 @@ namespace SocketAsyncClient
             new AutoResetEvent(false)
         };
 
+        private SocketAsyncEventArgs sendEventArgs;
+
+        private BlockingCollection<byte[]> sendingQueue = new BlockingCollection<byte[]>();
+        private Thread sendMessageWorker;
+
         internal SocketClient(IPEndPoint hostEndPoint)
         {
             this.hostEndPoint = hostEndPoint;
             this.clientSocket = new Socket(this.hostEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            this.sendMessageWorker = new Thread(new ThreadStart(SendQueueMessage));
         }
 
         internal void Connect()
@@ -64,6 +72,7 @@ namespace SocketAsyncClient
             {
                 throw new SocketException((Int32)errorCode);
             }
+            sendMessageWorker.Start();
         }
         internal void Disconnect()
         {
@@ -71,14 +80,22 @@ namespace SocketAsyncClient
         }
         internal void Send(byte[] message)
         {
-            var completeArgs = new SocketAsyncEventArgs();
-            completeArgs.SetBuffer(message, 0, message.Length);
-            completeArgs.UserToken = this.clientSocket;
-            completeArgs.RemoteEndPoint = this.hostEndPoint;
-            completeArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnSend);
-            clientSocket.SendAsync(completeArgs);
+            sendingQueue.Add(message);
         }
 
+        private void SendQueueMessage()
+        {
+            while (true)
+            {
+                var message = sendingQueue.Take();
+                if (message != null)
+                {
+                    sendEventArgs.SetBuffer(message, 0, message.Length);
+                    clientSocket.SendAsync(sendEventArgs);
+                    autoSendEvent.WaitOne();
+                }
+            }
+        }
         private void OnConnect(object sender, SocketAsyncEventArgs e)
         {
             // Signals the end of connection.
@@ -86,9 +103,15 @@ namespace SocketAsyncClient
 
             // Set the flag for socket connected.
             this.connected = (e.SocketError == SocketError.Success);
+
+            sendEventArgs = new SocketAsyncEventArgs();
+            sendEventArgs.UserToken = this.clientSocket;
+            sendEventArgs.RemoteEndPoint = this.hostEndPoint;
+            sendEventArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnSend);
         }
         private void OnSend(object sender, SocketAsyncEventArgs e)
         {
+            autoSendEvent.Set();
             //// Signals the end of send.
             //autoSendReceiveEvents[ReceiveOperation].Set();
 

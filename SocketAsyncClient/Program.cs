@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace SocketAsyncClient
@@ -12,9 +10,9 @@ namespace SocketAsyncClient
         {
             try
             {
-                int iterations = 10000;
-                int clientCount = 10;
-                int messageSize = 1024;
+                int iterations = 25000;
+                int clientCount = 40;
+                int messageSize = 1024 * 1;
                 var data = new byte[messageSize];
                 var message = BuildMessage(data);
 

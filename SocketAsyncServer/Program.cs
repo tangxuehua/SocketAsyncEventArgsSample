@@ -5,7 +5,7 @@ namespace SocketAsyncServer
 {
     static class Program
     {
-        private const Int32 DEFAULT_PORT = 9900, DEFAULT_MAX_NUM_CONNECTIONS = 10, DEFAULT_BUFFER_SIZE = 30000;
+        private const Int32 DEFAULT_PORT = 9900, DEFAULT_MAX_NUM_CONNECTIONS = 1000, DEFAULT_BUFFER_SIZE = 60000;
 
         static void Main(String[] args)
         {

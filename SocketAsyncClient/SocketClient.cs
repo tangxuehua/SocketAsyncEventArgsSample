@@ -2,61 +2,29 @@ using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 
 namespace SocketAsyncClient
 {
-    internal sealed class SocketClient : IDisposable
+    public sealed class SocketClient : IDisposable
     {
-        /// <summary>
-        /// Constants for socket operations.
-        /// </summary>
-        private const Int32 ReceiveOperation = 1, SendOperation = 0;
-
-        /// <summary>
-        /// The socket used to send/receive messages.
-        /// </summary>
         private Socket clientSocket;
-
-        /// <summary>
-        /// Flag for connected socket.
-        /// </summary>
-        private Boolean connected = false;
-
-        /// <summary>
-        /// Listener endpoint.
-        /// </summary>
+        private bool connected = false;
         private IPEndPoint hostEndPoint;
-
-        /// <summary>
-        /// Signals a connection.
-        /// </summary>
         private AutoResetEvent autoConnectEvent = new AutoResetEvent(false);
-
         private AutoResetEvent autoSendEvent = new AutoResetEvent(false); 
-        /// <summary>
-        /// Signals the send/receive operation.
-        /// </summary>
-        private static AutoResetEvent[] autoSendReceiveEvents = new AutoResetEvent[]
-        {
-            new AutoResetEvent(false),
-            new AutoResetEvent(false)
-        };
-
         private SocketAsyncEventArgs sendEventArgs;
-
         private BlockingCollection<byte[]> sendingQueue = new BlockingCollection<byte[]>();
         private Thread sendMessageWorker;
 
-        internal SocketClient(IPEndPoint hostEndPoint)
+        public SocketClient(IPEndPoint hostEndPoint)
         {
             this.hostEndPoint = hostEndPoint;
             this.clientSocket = new Socket(this.hostEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             this.sendMessageWorker = new Thread(new ThreadStart(SendQueueMessage));
         }
 
-        internal void Connect()
+        public void Connect()
         {
             SocketAsyncEventArgs connectArgs = new SocketAsyncEventArgs();
 
@@ -74,11 +42,11 @@ namespace SocketAsyncClient
             }
             sendMessageWorker.Start();
         }
-        internal void Disconnect()
+        public void Disconnect()
         {
             clientSocket.Disconnect(false);
         }
-        internal void Send(byte[] message)
+        public void Send(byte[] message)
         {
             sendingQueue.Add(message);
         }
@@ -98,11 +66,9 @@ namespace SocketAsyncClient
         }
         private void OnConnect(object sender, SocketAsyncEventArgs e)
         {
-            // Signals the end of connection.
             autoConnectEvent.Set();
 
-            // Set the flag for socket connected.
-            this.connected = (e.SocketError == SocketError.Success);
+            connected = (e.SocketError == SocketError.Success);
 
             sendEventArgs = new SocketAsyncEventArgs();
             sendEventArgs.UserToken = this.clientSocket;
@@ -133,11 +99,6 @@ namespace SocketAsyncClient
             //    this.ProcessError(e);
             //}
         }
-        private void OnReceive(object sender, SocketAsyncEventArgs e)
-        {
-            // Signals the end of receive.
-            autoSendReceiveEvents[SendOperation].Set();
-        }
         private void ProcessError(SocketAsyncEventArgs e)
         {
             Socket s = e.UserToken as Socket;
@@ -167,14 +128,9 @@ namespace SocketAsyncClient
 
         #region IDisposable Members
 
-        /// <summary>
-        /// Disposes the instance of SocketClient.
-        /// </summary>
         public void Dispose()
         {
             autoConnectEvent.Close();
-            autoSendReceiveEvents[SendOperation].Close();
-            autoSendReceiveEvents[ReceiveOperation].Close();
             if (this.clientSocket.Connected)
             {
                 this.clientSocket.Close();

@@ -32,9 +32,9 @@ namespace SocketAsyncClient
         /// <summary>
         /// Signals a connection.
         /// </summary>
-        private static AutoResetEvent autoConnectEvent = new AutoResetEvent(false);
+        private AutoResetEvent autoConnectEvent = new AutoResetEvent(false);
 
-        private static AutoResetEvent autoSendEvent = new AutoResetEvent(false); 
+        private AutoResetEvent autoSendEvent = new AutoResetEvent(false); 
         /// <summary>
         /// Signals the send/receive operation.
         /// </summary>

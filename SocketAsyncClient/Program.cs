@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SocketAsyncClient
@@ -11,29 +12,26 @@ namespace SocketAsyncClient
         {
             try
             {
-                int iterations = 100000;
-                int clientCount = 1;
+                int iterations = 10000;
+                int clientCount = 10;
                 int messageSize = 1024;
                 var data = new byte[messageSize];
                 var message = BuildMessage(data);
 
-                var action = new Action(() =>
+                var action = new Action<SocketClient>((client) =>
                 {
-                    var client = new SocketClient(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9900));
-                    client.Connect();
                     for (var i = 0; i < iterations; i++)
                     {
                         client.Send(message);
                     }
                 });
 
-                var actionList = new List<Action>();
                 for (var index = 0; index < clientCount; index++)
                 {
-                    actionList.Add(action);
+                    var client = new SocketClient(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9900));
+                    client.Connect();
+                    Task.Factory.StartNew(() => action(client));
                 }
-
-                Parallel.Invoke(actionList.ToArray());
 
                 Console.WriteLine("Press any key to terminate the client process...");
                 Console.Read();

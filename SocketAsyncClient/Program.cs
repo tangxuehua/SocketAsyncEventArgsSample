@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Net;
 using System.Threading.Tasks;
 
@@ -6,12 +7,15 @@ namespace SocketAsyncClient
 {
     static class Program
     {
+        public static int _receivedMessageCount = 0;  //for testing
+        public static Stopwatch _watch;  //for testing
+
         static void Main(string[] args)
         {
             try
             {
                 int iterations = 25000;
-                int clientCount = 40;
+                int clientCount = 4;
                 int messageSize = 1024 * 1;
                 var data = new byte[messageSize];
                 var message = BuildMessage(data);

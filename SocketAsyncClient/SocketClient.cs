@@ -221,9 +221,9 @@ namespace SocketAsyncClient
                     {
                         Program._watch = Stopwatch.StartNew();
                     }
-                    if (current % 1000 == 0)
+                    if (current % 10000 == 0)
                     {
-                        Console.WriteLine("received message, length:{0}, count:{1}, timeSpent:{2}", message.Length, current, Program._watch.ElapsedMilliseconds);
+                        Console.WriteLine("received reply message, length:{0}, count:{1}, timeSpent:{2}", message.Length, current, Program._watch.ElapsedMilliseconds);
                     }
                 }
             }

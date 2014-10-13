@@ -15,7 +15,7 @@ namespace SocketAsyncClient
             try
             {
                 int iterations = 25000;
-                int clientCount = 4;
+                int clientCount = 40;
                 int messageSize = 1024 * 1;
                 var data = new byte[messageSize];
                 var message = BuildMessage(data);

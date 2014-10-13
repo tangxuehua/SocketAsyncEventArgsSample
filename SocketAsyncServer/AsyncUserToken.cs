@@ -11,18 +11,14 @@ namespace SocketAsyncServer
     }
     public sealed class AsyncUserToken : IDisposable
     {
-        public AutoResetEvent AutoSendEvent;
         public Socket Socket { get; private set; }
-        public SocketAsyncEventArgs SendEventArgs { get; private set; }
         public int? MessageSize { get; set; }
         public int DataStartOffset { get; set; }
         public int NextReceiveOffset { get; set; }
 
-        public AsyncUserToken(Socket socket, SocketAsyncEventArgs sendEventArgs, AutoResetEvent autoResetEvent)
+        public AsyncUserToken(Socket socket)
         {
             this.Socket = socket;
-            this.SendEventArgs = sendEventArgs;
-            this.AutoSendEvent = autoResetEvent;
         }
 
         #region IDisposable Members

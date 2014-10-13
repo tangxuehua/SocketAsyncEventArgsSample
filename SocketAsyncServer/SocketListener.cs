@@ -21,14 +21,17 @@ namespace SocketAsyncServer
         private int _bufferSize;
         private int _connectedSocketCount;
         private int _maxConnectionCount;
-        private SocketAsyncEventArgsPool _socketAsyncEventArgsPool;
+        private SocketAsyncEventArgsPool _socketAsyncReceiveEventArgsPool;
+        private SocketAsyncEventArgsPool _socketAsyncSendEventArgsPool;
         private Semaphore _acceptedClientsSemaphore;
+        private AutoResetEvent waitSendEvent;
 
         public SocketListener(int maxConnectionCount, int bufferSize)
         {
             _maxConnectionCount = maxConnectionCount;
             _bufferSize = bufferSize;
-            _socketAsyncEventArgsPool = new SocketAsyncEventArgsPool(maxConnectionCount);
+            _socketAsyncReceiveEventArgsPool = new SocketAsyncEventArgsPool(maxConnectionCount);
+            _socketAsyncSendEventArgsPool = new SocketAsyncEventArgsPool(maxConnectionCount);
             _acceptedClientsSemaphore = new Semaphore(maxConnectionCount, maxConnectionCount);
 
             sendingQueue = new BlockingCollection<MessageData>();
@@ -39,8 +42,18 @@ namespace SocketAsyncServer
                 SocketAsyncEventArgs socketAsyncEventArgs = new SocketAsyncEventArgs();
                 socketAsyncEventArgs.Completed += OnIOCompleted;
                 socketAsyncEventArgs.SetBuffer(new Byte[bufferSize], 0, bufferSize);
-                _socketAsyncEventArgsPool.Push(socketAsyncEventArgs);
+                _socketAsyncReceiveEventArgsPool.Push(socketAsyncEventArgs);
             }
+
+            for (int i = 0; i < maxConnectionCount; i++)
+            {
+                SocketAsyncEventArgs socketAsyncEventArgs = new SocketAsyncEventArgs();
+                socketAsyncEventArgs.Completed += OnIOCompleted;
+                socketAsyncEventArgs.SetBuffer(new Byte[bufferSize], 0, bufferSize);
+                _socketAsyncSendEventArgsPool.Push(socketAsyncEventArgs);
+            }
+
+            waitSendEvent = new AutoResetEvent(false);
         }
 
         public void Start(IPEndPoint localEndPoint)
@@ -78,31 +91,6 @@ namespace SocketAsyncServer
                     throw new ArgumentException("The last operation completed on the socket was not a receive or send");
             }
         }
-
-        private void SendQueueMessage()
-        {
-            while (true)
-            {
-                var messageData = sendingQueue.Take();
-                if (messageData != null)
-                {
-                    var message = BuildMessage(messageData.Message);
-                    messageData.Token.SendEventArgs.SetBuffer(message, 0, message.Length);
-                    messageData.Token.SendEventArgs.UserToken = messageData.Token;
-                    messageData.Token.Socket.SendAsync(messageData.Token.SendEventArgs);
-                    messageData.Token.AutoSendEvent.WaitOne();
-                }
-            }
-        }
-        static byte[] BuildMessage(byte[] data)
-        {
-            var header = BitConverter.GetBytes(data.Length);
-            var message = new byte[header.Length + data.Length];
-            header.CopyTo(message, 0);
-            data.CopyTo(message, header.Length);
-            return message;
-        }
-
         private void StartAccept(SocketAsyncEventArgs acceptEventArg)
         {
             if (acceptEventArg == null)
@@ -125,11 +113,10 @@ namespace SocketAsyncServer
         {
             try
             {
-                SocketAsyncEventArgs readEventArgs = _socketAsyncEventArgsPool.Pop();
-                SocketAsyncEventArgs sendEventArgs = _socketAsyncEventArgsPool.Pop();
-                if (readEventArgs != null && sendEventArgs != null)
+                SocketAsyncEventArgs readEventArgs = _socketAsyncReceiveEventArgsPool.Pop();
+                if (readEventArgs != null)
                 {
-                    readEventArgs.UserToken = new AsyncUserToken(e.AcceptSocket, sendEventArgs, new AutoResetEvent(false));
+                    readEventArgs.UserToken = new AsyncUserToken(e.AcceptSocket);
                     Interlocked.Increment(ref _connectedSocketCount);
                     Console.WriteLine("Client connection accepted. There are {0} clients connected to the server", _connectedSocketCount);
                     if (!e.AcceptSocket.ReceiveAsync(readEventArgs))
@@ -260,7 +247,7 @@ namespace SocketAsyncServer
             {
                 _watch = Stopwatch.StartNew();
             }
-            if (current % 1000 == 0)
+            if (current % 10000 == 0)
             {
                 Console.WriteLine("received message, length:{0}, count:{1}, timeSpent:{2}", messageData.Length, current, _watch.ElapsedMilliseconds);
             }
@@ -268,7 +255,42 @@ namespace SocketAsyncServer
         }
         private void ProcessSend(SocketAsyncEventArgs e)
         {
-            (e.UserToken as AsyncUserToken).AutoSendEvent.Set();
+            _socketAsyncSendEventArgsPool.Push(e);
+            waitSendEvent.Set();
+        }
+        private void SendQueueMessage()
+        {
+            while (true)
+            {
+                var messageData = sendingQueue.Take();
+                if (messageData != null)
+                {
+                    SendMessage(messageData, BuildMessage(messageData.Message));
+                }
+            }
+        }
+        private void SendMessage(MessageData messageData, byte[] message)
+        {
+            var sendEventArgs = _socketAsyncSendEventArgsPool.Pop();
+            if (sendEventArgs != null)
+            {
+                sendEventArgs.SetBuffer(message, 0, message.Length);
+                sendEventArgs.UserToken = messageData.Token;
+                messageData.Token.Socket.SendAsync(sendEventArgs);
+            }
+            else
+            {
+                waitSendEvent.WaitOne();
+                SendMessage(messageData, message);
+            }
+        }
+        static byte[] BuildMessage(byte[] data)
+        {
+            var header = BitConverter.GetBytes(data.Length);
+            var message = new byte[header.Length + data.Length];
+            header.CopyTo(message, 0);
+            data.CopyTo(message, header.Length);
+            return message;
         }
         private void CloseClientSocket(SocketAsyncEventArgs e)
         {
@@ -277,7 +299,7 @@ namespace SocketAsyncServer
             _acceptedClientsSemaphore.Release();
             Interlocked.Decrement(ref _connectedSocketCount);
             Console.WriteLine("A client has been disconnected from the server. There are {0} clients connected to the server", _connectedSocketCount);
-            _socketAsyncEventArgsPool.Push(e);
+            _socketAsyncReceiveEventArgsPool.Push(e);
         }
     }
 }

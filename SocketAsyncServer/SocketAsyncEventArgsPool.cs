@@ -1,31 +1,26 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 
 namespace SocketAsyncServer
 {
     public sealed class SocketAsyncEventArgsPool
     {
-        Stack<SocketAsyncEventArgs> pool;
+        ConcurrentQueue<SocketAsyncEventArgs> queue;
 
         public SocketAsyncEventArgsPool(Int32 capacity)
         {
-            this.pool = new Stack<SocketAsyncEventArgs>(capacity);
+            this.queue = new ConcurrentQueue<SocketAsyncEventArgs>();
         }
 
         public SocketAsyncEventArgs Pop()
         {
-            lock (this.pool)
+            SocketAsyncEventArgs args;
+            if (this.queue.TryDequeue(out args))
             {
-                if (this.pool.Count > 0)
-                {
-                    return this.pool.Pop();
-                }
-                else
-                {
-                    return null;
-                }
+                return args;
             }
+            return null;
         }
         public void Push(SocketAsyncEventArgs item)
         {
@@ -33,10 +28,7 @@ namespace SocketAsyncServer
             { 
                 throw new ArgumentNullException("Items added to a SocketAsyncEventArgsPool cannot be null"); 
             }
-            lock (this.pool)
-            {
-                this.pool.Push(item);
-            }
+            this.queue.Enqueue(item);
         }
     }
 }
